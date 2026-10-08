@@ -1,10 +1,50 @@
-If you don't understand Russian, use a translator. It will be easier for you to understand the meaning of the text after it's translated into your language, since it's familiar to you. But if I were to translate from mine into yours, it would be complete crap. By the way, this was also translated. Looks okay, huh?
+# tclac — ESPHome component for TCL (and compatible) mini-split air conditioners
 
-Внешний компонент кондиционеров TCL и аналогов для Home Assistant, используя ESPHome.
-Поддерживаются кондиционеры типа TAC-07CHSA и подобные. Увы, предположить точно получится подключить кондиционер или нет практически
-невозможно из-за огромного разбега в комплектациях: даже одна и та же модель, буквально буква-в-букву может, например, не иметь
-родного модуля WiFI, не иметь провода с USB разъемом или вовсе на плате управления может не быть впаян разъем UART.
-Однако, в целом, с пайкой или без, проверены следующие кондиционеры:
+Replaces the stock WiFi dongle on TCL and compatible mini-splits with a plain
+ESP module running ESPHome, so the AC becomes a first-class Home Assistant
+climate entity.
+
+**This repo is a fork of
+[I-am-nightingale/tclac](https://github.com/I-am-nightingale/tclac)** with
+additions for English-speaking users and Fahrenheit-friendly behavior:
+
+- Reads and writes **0.5°C target setpoints**. The AC's remote has always
+  supported 0.5°C steps (encoded as a +0.5°C flag in status byte 9, bit 0);
+  the upstream component read only whole °C and the extra half degree was
+  silently lost.
+- Default visual step is **0.5°C** (matches the hardware's native
+  resolution).
+- Writes include a half-flag so setpoints like 23.5°C land on the AC
+  cleanly. Setpoints that fall on a whole °C still produce byte-identical
+  frames to the upstream behavior — no regression for existing deployments.
+- Setpoints are snapped to the 0.5°C grid in `control()` before publishing,
+  so Home Assistant doesn't flicker between the raw request and the
+  snapped-ack value on each click (noticeable in Fahrenheit, where 1°F ≈
+  0.56°C).
+- `fahrenheit_display` config option toggles the AC's **indoor-unit panel**
+  between °C and °F display (byte 12 bit 7 of the TX frame).
+- Documentation and user-facing strings translated to English. The
+  original Russian source comments are preserved to keep merges with
+  upstream clean.
+
+## Credits
+
+Full credit to the upstream author
+([I-am-nightingale](https://github.com/I-am-nightingale)) and prior
+contributors ([xaxexa](https://github.com/xaxexa),
+[junkfix](https://github.com/junkfix),
+[Pommel4711](https://github.com/Pommel4711)) for the component itself.
+Original Russian README and the author's write-ups:
+<https://dzen.ru/a/ZmdoyUNswXWnulhg>.
+
+## Confirmed-working units
+
+The upstream project has reports from these models. Compatibility is hard to
+guarantee from the model name alone — the same model can ship with or
+without a native WiFi module, a USB power lead, or even the UART header
+soldered. If yours isn't listed, it still has a good chance of working as
+long as there's a UART header on the control board.
+
 - Axioma ASX09H1/ASB09H1
 - Ballu BSAI-12HN1_15Y
 - Ballu Discovery DC BSVI-07HN8
@@ -23,7 +63,7 @@ If you don't understand Russian, use a translator. It will be easier for you to 
 - TCL ELI ONF 12
 - TCL Liferise ONF 09
 - TCL TAC-CT09INV/R
-- TCL One Inverter TACM-09HRID/E1 (возможно, иной порядок контактов)
+- TCL One Inverter TACM-09HRID/E1 (pin order may differ)
 - TCL TAC-07CHSA/TPG-W
 - TCL TAC-09CHSA/TPG
 - TCL TAC-09CHSA/DSEI-W
@@ -33,64 +73,67 @@ If you don't understand Russian, use a translator. It will be easier for you to 
 - TCL TAC-XAL24I
 - TCL TPG31IHB
 
-Компонент поддерживает длину сообщений от кондиционера в 61, 65 и 68 байт, однако, полноценно проверялся только с 61 байтовыми сообщениями.
+Status frames of 61, 65 and 68 bytes are all parsed, but only the 61-byte
+variant has been exercised extensively.
 
-Компоненту требуется HomeAsistant и ESPHome версии не ниже 2026.4.0 !
-____
-Это все для работы ИСКЛЮЧИТЕЛЬНО с HomeAsistant и ESPHome. Если Вас интересует другие варианты или возможность подключить кондиционер
-как-то иначе к каким-то другим системам, то мне есть что предложить:
-[Вариант для подключения через MQTT](https://github.com/pavel211/TCL-TAC-07-WiFi)
-____
-Статья по проекту находится [в моем канале на Дзене](https://dzen.ru/a/ZmdoyUNswXWnulhg)
+## Requirements
 
-Все работает, даже стабильно. Какие глюки видел- устранил, какие желания были- реализовал. Конечно, не все, хотелось бы еще спорткар..
-Используя компонент прямо сейчас Вы уже не рискуете душевным здоровьем, но внезапные глюки вполне могут напасть. Если вдруг такое
-случиться именно с Вами- прошу сообщить мне на Дзене, приму меры.
-Подробное описание будет постепенно появляться [в моем канале на Дзене](https://dzen.ru/a/ZmdoyUNswXWnulhg) , сюда буду выкладывать
-самое важное по мере сил.
+Home Assistant with ESPHome **2026.4.0 or newer**.
 
-Выразить благодарность в России и Беларуси: карта Озон-банка 2204 3211 5682 2009
+If you need an MQTT-based solution instead,
+[pavel211/TCL-TAC-07-WiFi](https://github.com/pavel211/TCL-TAC-07-WiFi) is
+a well-known alternative.
 
-Thank the author for the work: [My Steam account](https://steamcommunity.com/id/solovey-iron/) (yep, I like computer games)
-____
-Образец для конфигурации ESPHome в файле TCL-Conditioner.yaml , упрощенный вариант конфигурации- Sample_conf.yaml . Скачайте к себе
-и используйте в ESPHome, или просто скопируйте из него всю конфигурацию и вставьте вместо своей, однако, не забыв отредактировать
-все поля. В файле есть подсказки по каждому полю.
+## Quickstart
 
-Вопрос может возникнуть с 2 моментами: платформа (чип или модуль) и подгружаемые файлы. Попробую объяснить.
+The repo ships two sample ESPHome configurations:
 
-## Настройка платформы
-Платформа настраивается точно так же, как ей и полагается настраиваться в ESPHome. Например, так выглядит кусок кода для ESP-01S:
+- `TCL-Conditioner.yaml` — fully commented reference config.
+- `Sample_conf.yaml` — minimal config.
+
+Download one, edit the substitutions, and flash it. The reusable climate
+logic lives in `packages/core.yaml` and is pulled from GitHub automatically
+at build time, so you only maintain the device-specific bits locally
+(hostname, Wi-Fi, pin assignments, optional add-ons).
+
+### Platform selection
+
+Set the platform block for your module. Only one block should be
+uncommented at a time.
+
+ESP-01S:
 ```yaml
 esp8266:
   board: esp01_1m
 ```
-А вот так выглядит кусок кода для модуля Hommyn HDN/WFN-02-01 из первой статьи про кондиционер:
+
+Hommyn HDN/WFN-02-01 (ESP32-C3):
 ```yaml
 esp32:
   board: esp32-c3-devkitm-1
   framework:
     type: arduino
 ```
-Можно подключать платформу и через основной конфиг. Вот, предложенный [испытателем альфа-версии](https://github.com/kai-zer-ru), пример для Esp32 WROOM32:
+
+ESP32 WROOM32 (contributed by
+[kai-zer-ru](https://github.com/kai-zer-ru)):
 ```yaml
 esphome:
   platform: ESP32
   board: nodemcu-32s
 ```
-А это уже пример для wemos D1 Mini nodemcu esp12f:
+
+Wemos D1 Mini (ESP12-F):
 ```yaml
 esphome:
   platform: ESP8266
   board: esp12e
 ```
-В общем- все то же самое, как и обычно, вариант под свою платформу легко ищется в интернете.
 
-**!Важно не забыть закомментировать или удалить строки других платформ!**
+### Static IP (optional)
 
-## Настройка IP адреса
-По умолчанию, IP адрес получается автоматически от DHCP сервера. Однако, можно назначить
-IP адрес вручную. Для этого в самом конце файла конфигурации добавьте следующее:
+By default the device gets a DHCP lease. For a static IP, append this at
+the bottom of the config:
 
 ```yaml
 wifi:
@@ -100,79 +143,61 @@ wifi:
     subnet: 255.255.255.0
 ```
 
-## Настройка подгружаемых файлов
-Для добавления или удаления определенных частей конфига я решил использовать подгружаемые файлы- они загружаются ESPHome автоматически,
-если у сервера с Home Assistant есть доступ в интернет. Такой подход позволяет редактировать и обновлять не весь конфиг куском,
-а частями, не трогая то, что работает.
-Еще один плюс- не нужно километровые куски кода комментировать или раскомментировать, не нужно знать разметку, нет необходимости считать
-проклятые пробелы и прочее. Все делается добавлением или удалением ссылок на файлы. Итак, вот так выглядит блок подгружаемых файлов:
-```yaml
-packages:
-  remote_package:
-    url: https://github.com/I-am-nightingale/tclac.git
-    ref: master
-    files:
-    # v - равнение строк с опциями вот по этой позиции, иначе глючить будет
-      - packages/core.yaml # Ядро всего сущего
-      # - packages/leds.yaml
-    refresh: 30s
-```
-Все подгружаемые файлы указываются в секции **files:**. Для работы необходимо, чтобы был хотя-бы
-```yaml
-- packages/core.yaml # Ядро всего сущего
-```
-Все остальные модули по желанию (их описание в том же файле чуть выше). **Важно**, чтобы все строки с файлами были выровнены по
-импровизированной метке, которую я специально указал, иначе у ESPHome возникнет много вопросов к Вам. Например, **должно быть так:**
-```yaml
-packages:
-  remote_package:
-    url: https://github.com/I-am-nightingale/tclac.git
-    ref: master
-    files:
-    # v - равнение строк с опциями вот по этой позиции, иначе глючить будет
-      - packages/core.yaml # Ядро всего сущего
-      - packages/leds.yaml
-    refresh: 30s
-```
-Например, так подключается 3 кратный повтор отправки комманд в случае, если связь плохая (packages/bad_connect.yaml):
+### Add-on packages
+
+Optional pieces live in separate files under `packages/` and are included
+by listing them under `files:` in your `packages:` block. The core package
+is required; everything else is opt-in.
 
 ```yaml
 packages:
   remote_package:
-    url: https://github.com/I-am-nightingale/tclac.git
+    url: https://github.com/luthcody/tclac.git
     ref: master
     files:
-    # v - равнение строк с опциями вот по этой позиции, иначе глючить будет
-      - packages/core.yaml # Ядро всего сущего
-      - packages/leds.yaml
-	  - packages/bad_connect.yaml
-    refresh: 30s
+    # v - keep every file line indented to this column, otherwise ESPHome parses it as nested
+      - packages/core.yaml       # required — the climate component
+      # - packages/leds.yaml       # RX/TX activity LEDs on the pins named by receive_led / transmit_led
+      # - packages/bad_connect.yaml  # repeats each command 3× for noisy links
+      # - packages/uart_speed.yaml   # exposes a UART baud-rate selector in the device settings
+    refresh: 0s
 ```
 
-А так подключается переключатель скорости UART в настройках для тех, у кого кондиционер работает на другой скорости (packages/uart_speed.yaml):
+Alignment matters — every file line must be indented exactly as shown. The
+wrong indentation produces confusing ESPHome parse errors. Example of what
+**not** to do:
 
 ```yaml
 packages:
   remote_package:
-    url: https://github.com/I-am-nightingale/tclac.git
+    url: https://github.com/luthcody/tclac.git
     ref: master
     files:
-    # v - равнение строк с опциями вот по этой позиции, иначе глючить будет
-      - packages/core.yaml # Ядро всего сущего
-      - packages/leds.yaml
-	  - packages/uart_speed.yaml
+      - packages/core.yaml
+        - packages/leds.yaml     # WRONG — extra indent breaks the parse
     refresh: 30s
 ```
 
-А вот так уже **не правильно:**
+## Fahrenheit display mode
+
+If the indoor unit's panel should match a Home Assistant UI set to °F,
+add this substitution to your device yaml:
+
 ```yaml
-packages:
-  remote_package:
-    url: https://github.com/I-am-nightingale/tclac.git
-    ref: master
-    files:
-    # v - равнение строк с опциями вот по этой позиции, иначе глючить будет
-      - packages/core.yaml # Ядро всего сущего
-        - packages/leds.yaml
-    refresh: 30s
+substitutions:
+  fahrenheit_display: "true"
 ```
+
+This flips bit 7 of TX byte 12 (`//fahrenheit...80=f 0=c`) and only
+changes the physical display on the indoor unit. The over-the-wire
+protocol stays in °C with 0.5°C granularity regardless of the display
+mode.
+
+## Attribution
+
+Thanks to the original author, [I-am-nightingale](https://github.com/I-am-nightingale),
+who created and maintains the upstream project. If this fork helps you,
+please star the upstream repo too.
+
+Upstream author's Steam account for thanks:
+<https://steamcommunity.com/id/solovey-iron/>.

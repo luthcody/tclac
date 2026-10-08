@@ -30,8 +30,9 @@ DEPENDENCIES = ["climate", "uart"]
 
 TCLAC_MIN_TEMPERATURE = 16.0
 TCLAC_MAX_TEMPERATURE = 31.0
-# Протокол поддерживает шаг 0.5°C (пульт умеет это сам, подтверждено
-# захватом статусных кадров: байт 9 бит 0 — флаг +0.5°C).
+# The protocol supports 0.5°C granularity (the physical remote uses it;
+# status byte 9 bit 0 is the +0.5°C flag). Defaulting the visual step to
+# 0.5°C matches the AC's native resolution.
 TCLAC_TARGET_TEMPERATURE_STEP = 0.5
 TCLAC_CURRENT_TEMPERATURE_STEP = 0.5
 
@@ -119,33 +120,33 @@ AIRFLOW_HORIZONTAL_DIRECTION_OPTIONS = {
     "MAX_RIGHT": AirflowHorizontalDirection.MAX_RIGHT,
 }
 
-# Проверка конфигурации интерфейса и принятие значений по умолчанию
+# Validate the visual block and fill in sensible defaults.
 def validate_visual(config):
     if CONF_VISUAL in config:
         visual_config = config[CONF_VISUAL]
         if CONF_MIN_TEMPERATURE in visual_config:
             min_temp = visual_config[CONF_MIN_TEMPERATURE]
             if min_temp < TCLAC_MIN_TEMPERATURE:
-                raise cv.Invalid(f"Указанная интерфейсная минимальная температура в {min_temp} ниже допустимой {TCLAC_MIN_TEMPERATURE} для кондиционера")
+                raise cv.Invalid(f"Visual minimum temperature {min_temp}°C is below the AC's minimum of {TCLAC_MIN_TEMPERATURE}°C")
         else:
             config[CONF_VISUAL][CONF_MIN_TEMPERATURE] = TCLAC_MIN_TEMPERATURE
         if CONF_MAX_TEMPERATURE in visual_config:
             max_temp = visual_config[CONF_MAX_TEMPERATURE]
             if max_temp > TCLAC_MAX_TEMPERATURE:
-                raise cv.Invalid(f"Указанная интерфейсная максимальная температура в {max_temp} выше допустимой {TCLAC_MAX_TEMPERATURE} для кондиционера")
+                raise cv.Invalid(f"Visual maximum temperature {max_temp}°C is above the AC's maximum of {TCLAC_MAX_TEMPERATURE}°C")
         else:
             config[CONF_VISUAL][CONF_MAX_TEMPERATURE] = TCLAC_MAX_TEMPERATURE
         if CONF_TEMPERATURE_STEP in visual_config:
             temp_step = config[CONF_VISUAL][CONF_TEMPERATURE_STEP][CONF_TARGET_TEMPERATURE]
             if ((int)(temp_step * 2)) / 2 != temp_step:
-                raise cv.Invalid(f"Указанный шаг температуры {temp_step} не корректен, должен быть кратен 0.5")
+                raise cv.Invalid(f"Temperature step {temp_step} is invalid — the AC only supports multiples of 0.5°C")
         else:
             config[CONF_VISUAL][CONF_TEMPERATURE_STEP] = {CONF_TARGET_TEMPERATURE: TCLAC_TARGET_TEMPERATURE_STEP,CONF_CURRENT_TEMPERATURE: TCLAC_CURRENT_TEMPERATURE_STEP,}
     else:
         config[CONF_VISUAL] = {CONF_MIN_TEMPERATURE: TCLAC_MIN_TEMPERATURE,CONF_MAX_TEMPERATURE: TCLAC_MAX_TEMPERATURE,CONF_TEMPERATURE_STEP: {CONF_TARGET_TEMPERATURE: TCLAC_TARGET_TEMPERATURE_STEP,CONF_CURRENT_TEMPERATURE: TCLAC_CURRENT_TEMPERATURE_STEP,},}
     return config
 
-# Проверка конфигурации компонента и принятие значений по умолчанию
+# Component config schema and defaults.
 CONFIG_SCHEMA = cv.All(
     climate.climate_schema(tclacClimate)
     .extend(
@@ -188,7 +189,7 @@ HorizontalSwingDirectionAction = tclac_ns.class_("HorizontalSwingDirectionAction
 
 TCLAC_ACTION_BASE_SCHEMA = automation.maybe_simple_id({cv.GenerateID(CONF_ID): cv.use_id(tclacClimate),})
 
-# Регистрация событий включения и отключения дисплея кондиционера
+# AC display on/off actions
 @automation.register_action(
     "climate.tclac.display_on", DisplayOnAction, cv.Schema, synchronous=True
 )
@@ -200,7 +201,7 @@ async def display_action_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg, paren)
     return var
 
-# Регистрация событий включения и отключения пищалки кондиционера
+# Beeper on/off actions
 @automation.register_action(
     "climate.tclac.beeper_on", BeeperOnAction, cv.Schema, synchronous=True
 )
@@ -212,7 +213,7 @@ async def beeper_action_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg, paren)
     return var
 
-# Регистрация событий включения и отключения светодиодов связи модуля
+# Module RX/TX LED on/off actions
 @automation.register_action(
     "climate.tclac.module_display_on", ModuleDisplayOnAction, cv.Schema, synchronous=True
 )
@@ -224,7 +225,7 @@ async def module_display_action_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg, paren)
     return var
     
-# Регистрация событий включения и отключения принудительного применения настроек
+# Force-config on/off actions
 @automation.register_action(
     "climate.tclac.force_mode_on", ForceOnAction, cv.Schema, synchronous=True
 )
@@ -236,7 +237,7 @@ async def force_mode_action_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg, paren)
     return var
 
-# Регистрация события установки вертикальной фиксации заслонки
+# Set vertical louver fixed position action
 @automation.register_action(
     "climate.tclac.set_vertical_airflow",
     VerticalAirflowAction,
@@ -258,7 +259,7 @@ async def tclac_set_vertical_airflow_to_code(config, action_id, template_arg, ar
     return var
 
 
-# Регистрация события установки горизонтальной фиксации заслонок
+# Set horizontal louver fixed position action
 @automation.register_action(
     "climate.tclac.set_horizontal_airflow",
     HorizontalAirflowAction,
@@ -278,7 +279,7 @@ async def tclac_set_horizontal_airflow_to_code(config, action_id, template_arg, 
     return var
 
 
-# Регистрация события установки вертикального качания шторки
+# Set vertical louver swing direction action
 @automation.register_action(
     "climate.tclac.set_vertical_swing_direction",
     VerticalSwingDirectionAction,
@@ -298,7 +299,7 @@ async def tclac_set_vertical_swing_direction_to_code(config, action_id, template
     return var
 
 
-# Регистрация события установки горизонтального качания шторок
+# Set horizontal louver swing direction action
 @automation.register_action(
     "climate.tclac.set_horizontal_swing_direction",
     HorizontalSwingDirectionAction,
@@ -318,7 +319,7 @@ async def tclac_set_horizontal_swing_direction_to_code(config, action_id, templa
     return var
 
 
-# Добавление конфигурации в код
+# Register the config in code
 def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     yield cg.register_component(var, config)

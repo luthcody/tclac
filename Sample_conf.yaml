@@ -10,15 +10,18 @@ substitutions:
   uart_tx: GPIO1
   receive_led: GPIO2
   transmit_led: GPIO2
+  # "true" switches the indoor unit's panel to °F. Display-only; the
+  # wire protocol stays in °C with 0.5°C steps.
+  # fahrenheit_display: "true"
 
 packages:
   remote_package:
-    url: https://github.com/I-am-nightingale/tclac.git
+    url: https://github.com/luthcody/tclac.git
     ref: master
     files:
       - packages/core.yaml
-    refresh: 30s
-    
+    refresh: 0s
+
 esphome:
   platform: ESP32
   board: nodemcu-32s

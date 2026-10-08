@@ -174,9 +174,9 @@ void tclacClimate::readData() {
 	// Эту конструкцию предложила нейронка Claude, я вообще не понимаю таких изысков, так что вставляю как есть.
 	current_temperature = ((float)((dataRX[17] << 8) | dataRX[18]) / 374.0f - 32.0f) / 1.8f;
 
-	// Байт 8 (младшие 4 бита) — целая часть уставки от 16°C.
-	// Байт 9 бит 0 — флаг +0.5°C (пульт умеет шаг 0.5°C, подтверждено
-	// захватом статусных кадров при пошаговом изменении уставки).
+	// Byte 8 (low 4 bits) — whole-degree setpoint, offset from 16°C.
+	// Byte 9 bit 0 — +0.5°C flag (remote supports 0.5°C steps; confirmed
+	// by capturing status frames while stepping the setpoint on the remote).
 	target_temperature = (dataRX[FAN_SPEED_POS] & SET_TEMP_MASK) + 16
 		+ ((dataRX[9] & 0x01) ? 0.5f : 0.0f);
 
@@ -294,8 +294,8 @@ void tclacClimate::control(const climate::ClimateCall &call) {
 	// бы control() -> публикацию состояния -> снова эхо, и получался шторм.
 	bool changed = false;
 	if (call.get_mode().has_value() && *call.get_mode() != this->mode) changed = true;
-	// Сравниваем уставки с шагом 0.5°C — иначе переход, например, 24.0 -> 24.5
-	// отсеивался бы приведением к int как «нет изменений».
+	// Compare setpoints at 0.5°C resolution — otherwise an edit from 24.0
+	// to 24.5 would be dropped as "no change" by the int cast.
 	if (call.get_target_temperature().has_value()
 		&& std::lround(*call.get_target_temperature() * 2.0f)
 			!= std::lround(this->target_temperature * 2.0f)) changed = true;
@@ -312,10 +312,10 @@ void tclacClimate::control(const climate::ClimateCall &call) {
 	// А это и ниже я подрезал у Vi3jo.
 
 	if (call.get_mode().has_value()) this->mode = *call.get_mode();
-	// Снапим уставку в сетку 0.5°C ДО публикации: иначе HA сначала показывает
-	// запрошенное значение (напр. 23.33°C → 74.0°F), затем после ответа
-	// кондиционера пересчитывает в фактически применённое (23.5°C → 74.3°F),
-	// что в UI выглядит как мерцание на каждый клик.
+	// Snap the setpoint to the 0.5°C grid BEFORE publishing: otherwise HA
+	// first renders the raw request (e.g. 23.33°C → 74.0°F), then after
+	// the AC's status reply re-renders at the actually-applied value
+	// (23.5°C → 74.3°F), which looks like a flicker on every click.
 	if (call.get_target_temperature().has_value()) {
 		float requested = *call.get_target_temperature();
 		this->target_temperature = std::round(requested * 2.0f) / 2.0f;
@@ -346,12 +346,13 @@ void tclacClimate::takeControl() {
 	if (std::isnan(target_temperature) || target_temperature < 16 || target_temperature > 31) {
 		target_temperature = 24;
 	}
-	// Снапим уставку в сетку 0.5°C и раскладываем на целую часть и флаг +0.5.
-	// Протокол: байт 9 (младшие 4 бита) = 31 - whole; байт 14 бит 5 — half.
-	// Расположение бита half в TX-кадре взято из уже существующего в коде
-	// комментария «0,0,halfdegree,0,0,0,0,0» (поведение в статусном кадре
-	// подтверждено захватом: байт 9 бит 0). Бит выставляем только при .5 —
-	// при целой уставке кадр побайтово идентичен прежнему.
+	// Snap the setpoint to the 0.5°C grid and split into whole + half parts.
+	// Protocol: byte 9 (low 4 bits) = 31 - whole; byte 14 bit 5 = half.
+	// The half-bit location in the TX frame comes from the existing
+	// "0,0,halfdegree,0,0,0,0,0" annotation in the frame layout (the status
+	// frame half-bit at byte 9 bit 0 is confirmed by capture). Only set the
+	// bit when the setpoint actually has a .5 fraction — whole-degree
+	// setpoints produce byte-identical frames to the pre-patch behavior.
 	float snapped_target_temperature = std::round(target_temperature * 2.0f) / 2.0f;
 	int whole_target_temperature = (int) std::floor(snapped_target_temperature);
 	bool half_degree_target = (snapped_target_temperature - whole_target_temperature) >= 0.25f;
@@ -635,8 +636,8 @@ void tclacClimate::takeControl() {
 	//dataTX[9] = 0x0f;	//0 -31 ;    15 - 16 0,0,0,0, temp(4) settemp 31 - x
 	//dataTX[10] = 0x00;	//0,timerindicator,swingv(3),fan(3) fan+swing modes //0=auto 1=low 2=med 3=high
 	//dataTX[11] = 0x00;	//0,offtimer(6),0
-	// Бит 7 (0x80) — переключение дисплея внутреннего блока в °F (0 = °C).
-	// Это только отображение на панели кондиционера, не меняет протокол.
+	// Bit 7 (0x80) toggles the indoor unit's panel to °F (0 = °C).
+	// Display-only; it does not change the over-the-wire protocol.
 	dataTX[12] = fahrenheit_display_status_ ? 0x80 : 0x00;	//fahrenheit,ontimer(6),0 cf 80=f 0=c
 	dataTX[13] = 0x01;	//??
 	dataTX[14] = half_degree_target ? 0x20 : 0x00;	//0,0,halfdegree,0,0,0,0,0
@@ -794,7 +795,7 @@ void tclacClimate::set_display_state(bool disp_state) {
 		}
 	}
 }
-// Получение режима отображения °C / °F на внутреннем блоке
+// Set the indoor-unit display mode (°C / °F)
 void tclacClimate::set_fahrenheit_display_state(bool state) {
 	this->fahrenheit_display_status_ = state;
 	if (force_mode_status_){

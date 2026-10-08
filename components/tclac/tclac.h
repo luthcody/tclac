@@ -126,9 +126,9 @@ class tclacClimate : public climate::Climate, public esphome::uart::UARTDevice, 
 		bool beeper_status_;
 		bool display_status_;
 		bool force_mode_status_;
-		// Режим отображения на внутреннем блоке: true = °F, false = °C.
-		// Это только display на панели кондиционера — протокол и уставка
-		// в кадрах по-прежнему в °C с шагом 0.5°C.
+		// Indoor-unit display mode: true = °F, false = °C.
+		// Display-only — the protocol and setpoint on the wire stay in °C
+		// with 0.5°C steps regardless of this flag.
 		bool fahrenheit_display_status_ = false;
 		uint8_t switch_preset = 0;
 		bool module_display_status_;
