@@ -41,6 +41,7 @@ CONF_RX_LED = "rx_led"
 CONF_TX_LED = "tx_led"
 CONF_DISPLAY = "show_display"
 CONF_FAHRENHEIT_DISPLAY = "fahrenheit_display"
+CONF_FAHRENHEIT_MODE = "fahrenheit_mode"
 CONF_FORCE_MODE = "force_mode"
 CONF_VERTICAL_AIRFLOW = "vertical_airflow"
 CONF_MODULE_DISPLAY = "show_module_display"
@@ -122,6 +123,12 @@ AIRFLOW_HORIZONTAL_DIRECTION_OPTIONS = {
 
 # Validate the visual block and fill in sensible defaults.
 def validate_visual(config):
+    fahrenheit_mode = config.get(CONF_FAHRENHEIT_MODE, False)
+    # 1°F expressed in °C — the AC's hardware grid is 0.5°C, but HA converts
+    # device °C → display °F using exact arithmetic, so to get HA to show
+    # whole-°F stepping we tell it the step is 5/9°C (= 1°F).
+    target_step = 5.0 / 9.0 if fahrenheit_mode else TCLAC_TARGET_TEMPERATURE_STEP
+    current_step = 5.0 / 9.0 if fahrenheit_mode else TCLAC_CURRENT_TEMPERATURE_STEP
     if CONF_VISUAL in config:
         visual_config = config[CONF_VISUAL]
         if CONF_MIN_TEMPERATURE in visual_config:
@@ -138,12 +145,14 @@ def validate_visual(config):
             config[CONF_VISUAL][CONF_MAX_TEMPERATURE] = TCLAC_MAX_TEMPERATURE
         if CONF_TEMPERATURE_STEP in visual_config:
             temp_step = config[CONF_VISUAL][CONF_TEMPERATURE_STEP][CONF_TARGET_TEMPERATURE]
-            if ((int)(temp_step * 2)) / 2 != temp_step:
+            # Only enforce the 0.5°C multiple rule when NOT in fahrenheit_mode —
+            # F mode intentionally uses a 5/9°C step that doesn't fit the grid.
+            if not fahrenheit_mode and ((int)(temp_step * 2)) / 2 != temp_step:
                 raise cv.Invalid(f"Temperature step {temp_step} is invalid — the AC only supports multiples of 0.5°C")
         else:
-            config[CONF_VISUAL][CONF_TEMPERATURE_STEP] = {CONF_TARGET_TEMPERATURE: TCLAC_TARGET_TEMPERATURE_STEP,CONF_CURRENT_TEMPERATURE: TCLAC_CURRENT_TEMPERATURE_STEP,}
+            config[CONF_VISUAL][CONF_TEMPERATURE_STEP] = {CONF_TARGET_TEMPERATURE: target_step, CONF_CURRENT_TEMPERATURE: current_step}
     else:
-        config[CONF_VISUAL] = {CONF_MIN_TEMPERATURE: TCLAC_MIN_TEMPERATURE,CONF_MAX_TEMPERATURE: TCLAC_MAX_TEMPERATURE,CONF_TEMPERATURE_STEP: {CONF_TARGET_TEMPERATURE: TCLAC_TARGET_TEMPERATURE_STEP,CONF_CURRENT_TEMPERATURE: TCLAC_CURRENT_TEMPERATURE_STEP,},}
+        config[CONF_VISUAL] = {CONF_MIN_TEMPERATURE: TCLAC_MIN_TEMPERATURE, CONF_MAX_TEMPERATURE: TCLAC_MAX_TEMPERATURE, CONF_TEMPERATURE_STEP: {CONF_TARGET_TEMPERATURE: target_step, CONF_CURRENT_TEMPERATURE: current_step}}
     return config
 
 # Component config schema and defaults.
@@ -155,6 +164,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_BEEPER, default=True): cv.boolean,
             cv.Optional(CONF_DISPLAY, default=True): cv.boolean,
             cv.Optional(CONF_FAHRENHEIT_DISPLAY, default=False): cv.boolean,
+            cv.Optional(CONF_FAHRENHEIT_MODE, default=False): cv.boolean,
             cv.Optional(CONF_RX_LED): pins.gpio_output_pin_schema,
             cv.Optional(CONF_TX_LED): pins.gpio_output_pin_schema,
             cv.Optional(CONF_FORCE_MODE, default=True): cv.boolean,
@@ -334,6 +344,8 @@ def to_code(config):
         cg.add(var.set_display_state(config[CONF_DISPLAY]))
     if CONF_FAHRENHEIT_DISPLAY in config:
         cg.add(var.set_fahrenheit_display_state(config[CONF_FAHRENHEIT_DISPLAY]))
+    if CONF_FAHRENHEIT_MODE in config:
+        cg.add(var.set_fahrenheit_mode_state(config[CONF_FAHRENHEIT_MODE]))
     if CONF_FORCE_MODE in config:
         cg.add(var.set_force_mode_state(config[CONF_FORCE_MODE]))
     if CONF_SUPPORTED_MODES in config:

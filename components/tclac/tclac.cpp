@@ -180,6 +180,18 @@ void tclacClimate::readData() {
 	target_temperature = (dataRX[FAN_SPEED_POS] & SET_TEMP_MASK) + 16
 		+ ((dataRX[9] & 0x01) ? 0.5f : 0.0f);
 
+	// Fahrenheit UI mode: Home Assistant converts the °C value we publish
+	// into °F for display using exact arithmetic. If we publish the raw
+	// 0.5°C-grid value, HA shows a fractional °F like 74.3. To force HA
+	// to display a clean whole °F, we snap the published value to the °C
+	// that corresponds to the nearest whole °F. The AC's actual state is
+	// unchanged — this only affects what we tell HA.
+	if (fahrenheit_mode_) {
+		float f_target = target_temperature * 9.0f / 5.0f + 32.0f;
+		f_target = std::round(f_target);
+		target_temperature = (f_target - 32.0f) * 5.0f / 9.0f;
+	}
+
 	//ESP_LOGD("TCL", "TEMP: %f ", current_temperature);
 
 	if (dataRX[MODE_POS] & ( 1 << 4)) {
@@ -817,6 +829,10 @@ void tclacClimate::set_fahrenheit_display_state(bool state) {
 			tclacClimate::takeControl();
 		}
 	}
+}
+// Set the Fahrenheit UI mode (°F whole-degree stepping in Home Assistant)
+void tclacClimate::set_fahrenheit_mode_state(bool state) {
+	this->fahrenheit_mode_ = state;
 }
 // Получение состояния режима принудительного применения настроек
 void tclacClimate::set_force_mode_state(bool f_state) {

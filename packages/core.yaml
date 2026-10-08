@@ -19,6 +19,13 @@ substitutions:
   # "true"  = indoor-unit panel displays °F.
   # Display-only; the wire protocol stays in °C with 0.5°C steps.
   fahrenheit_display: "false"
+  # "false" = HA UI steps and displays in native 0.5°C (default).
+  # "true"  = HA UI steps and displays in whole °F. The AC still runs
+  # on its 0.5°C hardware grid; this makes HA show clean integer °F
+  # by rounding published setpoints to the nearest °F equivalent.
+  # Typically pair with fahrenheit_display: "true" so the indoor-unit
+  # panel matches HA.
+  fahrenheit_mode: "false"
 
 esphome:
   name: ${device_name}
@@ -329,3 +336,4 @@ climate:
     name: "${device_name} Climate"
     id: ${device_name}climate
     fahrenheit_display: ${fahrenheit_display}
+    fahrenheit_mode: ${fahrenheit_mode}

@@ -130,6 +130,11 @@ class tclacClimate : public climate::Climate, public esphome::uart::UARTDevice, 
 		// Display-only — the protocol and setpoint on the wire stay in °C
 		// with 0.5°C steps regardless of this flag.
 		bool fahrenheit_display_status_ = false;
+		// Fahrenheit UI mode: true = HA stepping and display snapped to
+		// whole °F. The AC still works internally on its 0.5°C grid; we
+		// just publish target_temperature values that convert exactly to
+		// whole °F so Home Assistant's °F display shows clean integers.
+		bool fahrenheit_mode_ = false;
 		uint8_t switch_preset = 0;
 		bool module_display_status_;
 		uint8_t switch_fan_mode = 0;
@@ -163,6 +168,7 @@ class tclacClimate : public climate::Climate, public esphome::uart::UARTDevice, 
 		void set_beeper_state(bool state);
 		void set_display_state(bool disp_state);
 		void set_fahrenheit_display_state(bool state);
+		void set_fahrenheit_mode_state(bool state);
 		// Фактическое состояние дисплея кондиционера (синхронизируется из
 		// статусных кадров в readData)
 		bool get_display_state() { return this->display_status_; }
