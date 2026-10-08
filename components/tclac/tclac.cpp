@@ -312,7 +312,14 @@ void tclacClimate::control(const climate::ClimateCall &call) {
 	// А это и ниже я подрезал у Vi3jo.
 
 	if (call.get_mode().has_value()) this->mode = *call.get_mode();
-    if (call.get_target_temperature().has_value()) this->target_temperature = *call.get_target_temperature();
+	// Снапим уставку в сетку 0.5°C ДО публикации: иначе HA сначала показывает
+	// запрошенное значение (напр. 23.33°C → 74.0°F), затем после ответа
+	// кондиционера пересчитывает в фактически применённое (23.5°C → 74.3°F),
+	// что в UI выглядит как мерцание на каждый клик.
+	if (call.get_target_temperature().has_value()) {
+		float requested = *call.get_target_temperature();
+		this->target_temperature = std::round(requested * 2.0f) / 2.0f;
+	}
     if (call.get_fan_mode().has_value()) this->fan_mode = *call.get_fan_mode();
 	if (call.get_swing_mode().has_value()) this->swing_mode = *call.get_swing_mode();
 	if (call.get_preset().has_value()) this->preset = *call.get_preset();
