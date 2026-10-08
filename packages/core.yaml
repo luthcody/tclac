@@ -15,6 +15,9 @@ external_components:
 
 substitutions:
   boot_actions: !lambda |- # Пустые действия по умолчанию
+  # По умолчанию дисплей внутреннего блока в °C. Переопределите в
+  # устройстве значением "true", чтобы панель кондиционера показывала °F.
+  fahrenheit_display: "false"
 
 esphome:
   name: ${device_name}
@@ -319,3 +322,4 @@ climate:
   - platform: tclac
     name: "${device_name} Climate"
     id: ${device_name}climate
+    fahrenheit_display: ${fahrenheit_display}
