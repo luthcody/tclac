@@ -5,11 +5,11 @@
 # Компонент климата
 external_components:
   - source:
-      url: https://github.com/I-am-nightingale/tclac.git
+      url: https://github.com/luthcody/tclac.git
       type: git
       ref: master
     components: [ tclac ]
-    refresh: 30s
+    refresh: 0s
 
 # Конфигурация ESPHome
 
