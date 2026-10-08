@@ -39,6 +39,7 @@ REPEAT_TX = "rep_tx"
 CONF_RX_LED = "rx_led"
 CONF_TX_LED = "tx_led"
 CONF_DISPLAY = "show_display"
+CONF_FAHRENHEIT_DISPLAY = "fahrenheit_display"
 CONF_FORCE_MODE = "force_mode"
 CONF_VERTICAL_AIRFLOW = "vertical_airflow"
 CONF_MODULE_DISPLAY = "show_module_display"
@@ -152,6 +153,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(REPEAT_TX): cv.boolean,
             cv.Optional(CONF_BEEPER, default=True): cv.boolean,
             cv.Optional(CONF_DISPLAY, default=True): cv.boolean,
+            cv.Optional(CONF_FAHRENHEIT_DISPLAY, default=False): cv.boolean,
             cv.Optional(CONF_RX_LED): pins.gpio_output_pin_schema,
             cv.Optional(CONF_TX_LED): pins.gpio_output_pin_schema,
             cv.Optional(CONF_FORCE_MODE, default=True): cv.boolean,
@@ -329,6 +331,8 @@ def to_code(config):
         cg.add(var.set_beeper_state(config[CONF_BEEPER]))
     if CONF_DISPLAY in config:
         cg.add(var.set_display_state(config[CONF_DISPLAY]))
+    if CONF_FAHRENHEIT_DISPLAY in config:
+        cg.add(var.set_fahrenheit_display_state(config[CONF_FAHRENHEIT_DISPLAY]))
     if CONF_FORCE_MODE in config:
         cg.add(var.set_force_mode_state(config[CONF_FORCE_MODE]))
     if CONF_SUPPORTED_MODES in config:

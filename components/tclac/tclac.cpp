@@ -635,7 +635,9 @@ void tclacClimate::takeControl() {
 	//dataTX[9] = 0x0f;	//0 -31 ;    15 - 16 0,0,0,0, temp(4) settemp 31 - x
 	//dataTX[10] = 0x00;	//0,timerindicator,swingv(3),fan(3) fan+swing modes //0=auto 1=low 2=med 3=high
 	//dataTX[11] = 0x00;	//0,offtimer(6),0
-	dataTX[12] = 0x00;	//fahrenheit,ontimer(6),0 cf 80=f 0=c
+	// Бит 7 (0x80) — переключение дисплея внутреннего блока в °F (0 = °C).
+	// Это только отображение на панели кондиционера, не меняет протокол.
+	dataTX[12] = fahrenheit_display_status_ ? 0x80 : 0x00;	//fahrenheit,ontimer(6),0 cf 80=f 0=c
 	dataTX[13] = 0x01;	//??
 	dataTX[14] = half_degree_target ? 0x20 : 0x00;	//0,0,halfdegree,0,0,0,0,0
 	dataTX[15] = 0x00;	//??
@@ -786,6 +788,15 @@ void tclacClimate::set_beeper_state(bool state) {
 // Получение состояния дисплея кондиционера
 void tclacClimate::set_display_state(bool disp_state) {
 	this->display_status_ = disp_state;
+	if (force_mode_status_){
+		if (allow_take_control){
+			tclacClimate::takeControl();
+		}
+	}
+}
+// Получение режима отображения °C / °F на внутреннем блоке
+void tclacClimate::set_fahrenheit_display_state(bool state) {
+	this->fahrenheit_display_status_ = state;
 	if (force_mode_status_){
 		if (allow_take_control){
 			tclacClimate::takeControl();

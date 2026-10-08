@@ -126,6 +126,10 @@ class tclacClimate : public climate::Climate, public esphome::uart::UARTDevice, 
 		bool beeper_status_;
 		bool display_status_;
 		bool force_mode_status_;
+		// Режим отображения на внутреннем блоке: true = °F, false = °C.
+		// Это только display на панели кондиционера — протокол и уставка
+		// в кадрах по-прежнему в °C с шагом 0.5°C.
+		bool fahrenheit_display_status_ = false;
 		uint8_t switch_preset = 0;
 		bool module_display_status_;
 		uint8_t switch_fan_mode = 0;
@@ -158,6 +162,7 @@ class tclacClimate : public climate::Climate, public esphome::uart::UARTDevice, 
 		void update() override;
 		void set_beeper_state(bool state);
 		void set_display_state(bool disp_state);
+		void set_fahrenheit_display_state(bool state);
 		// Фактическое состояние дисплея кондиционера (синхронизируется из
 		// статусных кадров в readData)
 		bool get_display_state() { return this->display_status_; }
