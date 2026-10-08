@@ -124,11 +124,13 @@ AIRFLOW_HORIZONTAL_DIRECTION_OPTIONS = {
 # Validate the visual block and fill in sensible defaults.
 def validate_visual(config):
     fahrenheit_mode = config.get(CONF_FAHRENHEIT_MODE, False)
-    # 1°F expressed in °C — the AC's hardware grid is 0.5°C, but HA converts
-    # device °C → display °F using exact arithmetic, so to get HA to show
-    # whole-°F stepping we tell it the step is 5/9°C (= 1°F).
-    target_step = 5.0 / 9.0 if fahrenheit_mode else TCLAC_TARGET_TEMPERATURE_STEP
-    current_step = 5.0 / 9.0 if fahrenheit_mode else TCLAC_CURRENT_TEMPERATURE_STEP
+    # Home Assistant appears to use the ESPHome climate step value as-is in
+    # whatever display unit the user has selected (confirmed empirically:
+    # sending 5/9°C showed up as "0.6°F step" in HA, producing 0.6°F clicks).
+    # So to get whole-°F stepping, pass 1.0 directly — HA interprets it as
+    # 1.0 in the display unit and clicks advance by 1°F.
+    target_step = 1.0 if fahrenheit_mode else TCLAC_TARGET_TEMPERATURE_STEP
+    current_step = 1.0 if fahrenheit_mode else TCLAC_CURRENT_TEMPERATURE_STEP
     if CONF_VISUAL in config:
         visual_config = config[CONF_VISUAL]
         if CONF_MIN_TEMPERATURE in visual_config:
