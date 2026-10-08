@@ -454,18 +454,6 @@ void tclacClimate::takeControl() {
 		}
 	}
 	
-	// Bit 7 (0x80) of byte 10 = °F display on the indoor unit's panel.
-	// Discovered by diffing F-mode vs C-mode status captures: byte 10 bit 7
-	// is set in every F-mode status frame and clear in every C-mode frame.
-	// The TX location mirrors the status location (educated guess based on
-	// the diff; needs physical confirmation that the AC's panel actually
-	// switches). Set before the swing bits are OR'd into the byte so the
-	// swing mode isn't disturbed. The previous hint pointed at byte 12
-	// bit 7, which the status captures proved is unused.
-	if (fahrenheit_display_status_) {
-		dataTX[10] |= 0x80;
-	}
-
 	// Устанавливаем режим качания заслонок
 	switch(this->swing_mode) {
 		case climate::CLIMATE_SWING_OFF:
@@ -482,10 +470,19 @@ void tclacClimate::takeControl() {
 			break;
 		case climate::CLIMATE_SWING_BOTH:
 			dataTX[10]	+= 0b00111000;
-			dataTX[11]	+= 0b00001000;  
+			dataTX[11]	+= 0b00001000;
 			break;
 	}
-	
+
+	// Bit 2 (0x04) of byte 11 = half-degree TX flag. Confirmed by sniffing
+	// stock OEM dongle TX frames across the entire 16–31°C range: byte 11
+	// bit 2 is set on every .5°C step and clear on every whole °C step.
+	// OR'd in after the swing bits (which use bit 3 of this byte) so we
+	// don't disturb the swing mode.
+	if (half_degree_target) {
+		dataTX[11] |= 0x04;
+	}
+
 	// Устанавливаем предустановки кондиционера
 	if (this->preset.has_value()) {
 		switch(*this->preset) {
@@ -648,9 +645,16 @@ void tclacClimate::takeControl() {
 	//dataTX[9] = 0x0f;	//0 -31 ;    15 - 16 0,0,0,0, temp(4) settemp 31 - x
 	//dataTX[10] = 0x00;	//0,timerindicator,swingv(3),fan(3) fan+swing modes //0=auto 1=low 2=med 3=high
 	//dataTX[11] = 0x00;	//0,offtimer(6),0
-	dataTX[12] = 0x00;	//fahrenheit,ontimer(6),0 cf 80=f 0=c  (comment was wrong — F-display is byte 10 bit 7, see above)
+	// Bit 7 (0x80) of byte 12 = °F display on the indoor unit's panel.
+	// Confirmed from a sweep of stock OEM dongle TX frames: byte 12 was
+	// 0x80 on every frame while the AC/dongle were in F mode. Earlier we
+	// mistakenly switched this to byte 10 bit 7 after seeing that bit in
+	// the AC's status replies — but byte 10 bit 7 is the AC's status
+	// indicator, not the TX request bit. The original //fahrenheit...80=f
+	// hint comment was right.
+	dataTX[12] = fahrenheit_display_status_ ? 0x80 : 0x00;	//fahrenheit,ontimer(6),0 cf 80=f 0=c
 	dataTX[13] = 0x01;	//??
-	dataTX[14] = half_degree_target ? 0x20 : 0x00;	//0,0,halfdegree,0,0,0,0,0
+	dataTX[14] = 0x00;	// (OEM dongle sniff: half-degree is byte 11 bit 2, not byte 14 bit 5 — hint comment was wrong)
 	dataTX[15] = 0x00;	//??
 	dataTX[16] = 0x00;	//??
 	dataTX[17] = 0x00;	//??
