@@ -173,8 +173,12 @@ void tclacClimate::readData() {
 	
 	// Эту конструкцию предложила нейронка Claude, я вообще не понимаю таких изысков, так что вставляю как есть.
 	current_temperature = ((float)((dataRX[17] << 8) | dataRX[18]) / 374.0f - 32.0f) / 1.8f;
-	
-	target_temperature = (dataRX[FAN_SPEED_POS] & SET_TEMP_MASK) + 16;
+
+	// Байт 8 (младшие 4 бита) — целая часть уставки от 16°C.
+	// Байт 9 бит 0 — флаг +0.5°C (пульт умеет шаг 0.5°C, подтверждено
+	// захватом статусных кадров при пошаговом изменении уставки).
+	target_temperature = (dataRX[FAN_SPEED_POS] & SET_TEMP_MASK) + 16
+		+ ((dataRX[9] & 0x01) ? 0.5f : 0.0f);
 
 	//ESP_LOGD("TCL", "TEMP: %f ", current_temperature);
 
@@ -290,8 +294,11 @@ void tclacClimate::control(const climate::ClimateCall &call) {
 	// бы control() -> публикацию состояния -> снова эхо, и получался шторм.
 	bool changed = false;
 	if (call.get_mode().has_value() && *call.get_mode() != this->mode) changed = true;
+	// Сравниваем уставки с шагом 0.5°C — иначе переход, например, 24.0 -> 24.5
+	// отсеивался бы приведением к int как «нет изменений».
 	if (call.get_target_temperature().has_value()
-		&& (int) *call.get_target_temperature() != (int) this->target_temperature) changed = true;
+		&& std::lround(*call.get_target_temperature() * 2.0f)
+			!= std::lround(this->target_temperature * 2.0f)) changed = true;
 	if (call.get_fan_mode().has_value()
 		&& (!this->fan_mode.has_value() || *call.get_fan_mode() != this->fan_mode.value())) changed = true;
 	if (call.get_swing_mode().has_value() && *call.get_swing_mode() != this->swing_mode) changed = true;
@@ -332,7 +339,16 @@ void tclacClimate::takeControl() {
 	if (std::isnan(target_temperature) || target_temperature < 16 || target_temperature > 31) {
 		target_temperature = 24;
 	}
-	uint8_t target_temperature_set = 31-(int)target_temperature;
+	// Снапим уставку в сетку 0.5°C и раскладываем на целую часть и флаг +0.5.
+	// Протокол: байт 9 (младшие 4 бита) = 31 - whole; байт 14 бит 5 — half.
+	// Расположение бита half в TX-кадре взято из уже существующего в коде
+	// комментария «0,0,halfdegree,0,0,0,0,0» (поведение в статусном кадре
+	// подтверждено захватом: байт 9 бит 0). Бит выставляем только при .5 —
+	// при целой уставке кадр побайтово идентичен прежнему.
+	float snapped_target_temperature = std::round(target_temperature * 2.0f) / 2.0f;
+	int whole_target_temperature = (int) std::floor(snapped_target_temperature);
+	bool half_degree_target = (snapped_target_temperature - whole_target_temperature) >= 0.25f;
+	uint8_t target_temperature_set = 31 - whole_target_temperature;
 	
 	// Включаем или отключаем пищалку в зависимости от переключателя в настройках
 	if (beeper_status_){
@@ -614,7 +630,7 @@ void tclacClimate::takeControl() {
 	//dataTX[11] = 0x00;	//0,offtimer(6),0
 	dataTX[12] = 0x00;	//fahrenheit,ontimer(6),0 cf 80=f 0=c
 	dataTX[13] = 0x01;	//??
-	dataTX[14] = 0x00;	//0,0,halfdegree,0,0,0,0,0
+	dataTX[14] = half_degree_target ? 0x20 : 0x00;	//0,0,halfdegree,0,0,0,0,0
 	dataTX[15] = 0x00;	//??
 	dataTX[16] = 0x00;	//??
 	dataTX[17] = 0x00;	//??

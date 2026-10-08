@@ -30,8 +30,10 @@ DEPENDENCIES = ["climate", "uart"]
 
 TCLAC_MIN_TEMPERATURE = 16.0
 TCLAC_MAX_TEMPERATURE = 31.0
-TCLAC_TARGET_TEMPERATURE_STEP = 1.0
-TCLAC_CURRENT_TEMPERATURE_STEP = 1.0
+# Протокол поддерживает шаг 0.5°C (пульт умеет это сам, подтверждено
+# захватом статусных кадров: байт 9 бит 0 — флаг +0.5°C).
+TCLAC_TARGET_TEMPERATURE_STEP = 0.5
+TCLAC_CURRENT_TEMPERATURE_STEP = 0.5
 
 REPEAT_TX = "rep_tx"
 CONF_RX_LED = "rx_led"
@@ -135,7 +137,7 @@ def validate_visual(config):
         if CONF_TEMPERATURE_STEP in visual_config:
             temp_step = config[CONF_VISUAL][CONF_TEMPERATURE_STEP][CONF_TARGET_TEMPERATURE]
             if ((int)(temp_step * 2)) / 2 != temp_step:
-                raise cv.Invalid(f"Указанный шаг температуры {temp_step} не корректен, должен быть кратен 1")
+                raise cv.Invalid(f"Указанный шаг температуры {temp_step} не корректен, должен быть кратен 0.5")
         else:
             config[CONF_VISUAL][CONF_TEMPERATURE_STEP] = {CONF_TARGET_TEMPERATURE: TCLAC_TARGET_TEMPERATURE_STEP,CONF_CURRENT_TEMPERATURE: TCLAC_CURRENT_TEMPERATURE_STEP,}
     else:
